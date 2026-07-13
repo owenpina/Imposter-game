@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imposter Game</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="toast" class="toast hidden"></div>
+
+<main id="app">
+
+  <!-- HOME -->
+  <section id="view-home" class="view">
+    <div class="card hero">
+      <h1>🕵️ Imposter Game</h1>
+      <p class="subtitle">Everyone gets a secret word. One (or more) of you doesn't. Find them&mdash;or don't get found.</p>
+
+      <div class="split">
+        <div class="panel">
+          <h2>Host a Game</h2>
+          <label>Your name
+            <input id="create-name" maxlength="20" placeholder="e.g. Owen" autocomplete="off">
+          </label>
+          <button id="btn-create" class="primary">Create Room</button>
+        </div>
+        <div class="panel">
+          <h2>Join a Game</h2>
+          <label>Room code
+            <input id="join-code" maxlength="4" placeholder="ABCD" autocomplete="off" style="text-transform:uppercase">
+          </label>
+          <label>Your name
+            <input id="join-name" maxlength="20" placeholder="e.g. Sam" autocomplete="off">
+          </label>
+          <button id="btn-join" class="primary">Join Room</button>
+        </div>
+      </div>
+      <p class="error" id="home-error"></p>
+    </div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="view-lobby" class="view hidden">
+    <div class="card">
+      <div class="room-code-banner">
+        <span>Room Code</span>
+        <strong id="lobby-code">----</strong>
+        <button id="btn-copy-code" class="ghost small">Copy</button>
+      </div>
+
+      <div class="split">
+        <div class="panel">
+          <h2>Players <span id="lobby-count" class="muted"></span></h2>
+          <ul id="lobby-players" class="player-list"></ul>
+        </div>
+
+        <div class="panel" id="host-settings">
+          <h2>Game Settings</h2>
+          <div id="category-checks" class="category-grid"></div>
+
+          <label>Custom categories <span class="muted">(one per line: Name: word1, word2, word3)</span>
+            <textarea id="custom-categories" rows="3" placeholder="Board Games: Chess, Monopoly, Clue"></textarea>
+          </label>
+
+          <div class="row">
+            <label>Number of imposters
+              <input id="num-imposters" type="number" min="1" max="6" value="1">
+            </label>
+            <label>Clue rounds before voting
+              <input id="clue-rounds" type="number" min="1" max="6" value="2">
+            </label>
+          </div>
+          <button id="btn-save-settings" class="ghost">Save Settings</button>
+          <button id="btn-start-game" class="primary">Start Game</button>
+          <p class="error" id="lobby-error"></p>
+        </div>
+
+        <div class="panel hidden" id="guest-settings">
+          <h2>Game Settings</h2>
+          <p id="guest-settings-summary" class="muted"></p>
+          <p>Waiting for host to start the game&hellip;</p>
+        </div>
+      </div>
+      <button id="btn-leave-lobby" class="ghost small danger">Leave Room</button>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="view-game" class="view hidden">
+    <div class="card">
+      <div class="game-header">
+        <div>
+          <span class="muted">Room <strong id="game-code"></strong></span>
+          <span class="muted" id="round-indicator"></span>
+        </div>
+        <div id="phase-badge" class="badge"></div>
+      </div>
+
+      <div id="role-card" class="role-card"></div>
+
+      <div id="clue-phase" class="hidden">
+        <h2>Clues</h2>
+        <ul id="clue-list" class="clue-list"></ul>
+        <p class="muted" id="clue-progress"></p>
+        <form id="clue-form" class="row">
+          <input id="clue-input" maxlength="40" placeholder="Type a one-word clue&hellip;" autocomplete="off">
+          <button class="primary" type="submit">Submit</button>
+        </form>
+        <p class="error" id="clue-error"></p>
+      </div>
+
+      <div id="imposter-panel" class="hidden panel imposter-panel">
+        <h2>🎭 Imposter Tools</h2>
+        <p class="muted">Think you know the word? Guess it to win instantly.</p>
+        <form id="guess-form" class="row">
+          <input id="guess-input" maxlength="40" placeholder="Guess the secret word&hellip;" autocomplete="off">
+          <button class="primary" type="submit">Guess</button>
+        </form>
+        <p id="guess-feedback"></p>
+      </div>
+
+      <div id="voting-phase" class="hidden">
+        <h2>Vote for the Imposter</h2>
+        <p class="muted" id="vote-progress"></p>
+        <ul id="vote-list" class="player-list voteable"></ul>
+        <p class="error" id="vote-error"></p>
+      </div>
+
+      <div id="reveal-phase" class="hidden">
+        <h2 id="reveal-title"></h2>
+        <p id="reveal-body"></p>
+      </div>
+
+      <p class="muted" id="last-guess-note"></p>
+
+      <div class="split">
+        <div class="panel">
+          <h2>Players</h2>
+          <ul id="game-players" class="player-list"></ul>
+        </div>
+        <div class="panel" id="host-controls">
+          <h2>Host Controls</h2>
+          <button id="btn-advance" class="ghost">Force Advance Phase</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME OVER -->
+  <section id="view-gameover" class="view hidden">
+    <div class="card">
+      <h1 id="gameover-title"></h1>
+      <p id="gameover-reason" class="subtitle"></p>
+      <p class="secret-word" id="gameover-word"></p>
+      <h2>Final Roles</h2>
+      <ul id="gameover-roles" class="player-list"></ul>
+      <button id="btn-play-again" class="primary hidden">Play Again</button>
+      <p class="muted hidden" id="gameover-wait">Waiting for host to start a new round&hellip;</p>
+      <button id="btn-leave-gameover" class="ghost small danger">Leave Room</button>
+    </div>
+  </section>
+
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
