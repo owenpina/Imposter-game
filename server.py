@@ -161,7 +161,7 @@ def make_room(host_name):
             "categories": list(DEFAULT_CATEGORIES.keys()),
             "customCategories": {},
             "numImposters": 1,
-            "clueRounds": 2,
+            "clueRounds": 1,
             "hintsEnabled": False,
         },
         "phase": "lobby",
