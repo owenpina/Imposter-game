@@ -168,7 +168,7 @@ def make_room(host_name, practice=False):
             "customCategories": {},
             "numImposters": 1,
             "clueRounds": 1,
-            "hintsEnabled": False,
+            "hintsEnabled": True,
         },
         "phase": "lobby",
         "game": None,
@@ -725,6 +725,20 @@ def action_guess(code, body):
         return {"ok": True, "correct": correct}
 
 
+def action_toggle_hints(code, body):
+    room = get_room(code)
+    with LOCK:
+        player = auth_player(room, body.get("playerId"), body.get("token"))
+        require_host(room, player)
+        game = room["game"]
+        if not game:
+            raise ApiError("Game hasn't started.")
+        game["hintsEnabled"] = not game.get("hintsEnabled", False)
+        # Keep the room setting in sync so it carries into the next round too.
+        room["settings"]["hintsEnabled"] = game["hintsEnabled"]
+        return {"ok": True, "hintsEnabled": game["hintsEnabled"]}
+
+
 def action_advance(code, body):
     room = get_room(code)
     with LOCK:
@@ -809,6 +823,7 @@ ROUTES = {
     ("POST", "/clue"): action_clue,
     ("POST", "/vote"): action_vote,
     ("POST", "/guess"): action_guess,
+    ("POST", "/toggle-hints"): action_toggle_hints,
     ("POST", "/advance"): action_advance,
     ("POST", "/play-again"): action_play_again,
     ("POST", "/leave"): action_leave,

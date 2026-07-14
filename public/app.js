@@ -250,6 +250,13 @@
     catch (err) { toast(err.message); }
   });
 
+  $("btn-toggle-hints").addEventListener("click", async () => {
+    try {
+      const res = await apiPost(authed("toggle-hints"), { playerId: session.playerId, token: session.token });
+      toast(res.hintsEnabled ? "Imposter hints ON" : "Imposter hints OFF");
+    } catch (err) { toast(err.message); }
+  });
+
   $("btn-play-again").addEventListener("click", async () => {
     try { await apiPost(authed("play-again"), { playerId: session.playerId, token: session.token }); }
     catch (err) { toast(err.message); }
@@ -402,6 +409,7 @@
     // Players panel
     $("game-players").innerHTML = state.players.map((p) => playerLi(p)).join("");
 
+    $("btn-toggle-hints").textContent = `🔎 Imposter Hints: ${g.hintsEnabled ? "On" : "Off"}`;
     $("host-controls").classList.toggle("hidden", !isHost || state.phase === "gameover");
   }
 
