@@ -275,13 +275,10 @@ button.danger { color: var(--bad); border-color: var(--bad); }
   text-align: center;
   font-size: 1.1rem;
 }
-.role-card.crew {
-  background: linear-gradient(135deg, #123a2c, #0d2a20);
-  border: 1px solid #1f5f45;
-}
+.role-card.crew,
 .role-card.imposter {
-  background: linear-gradient(135deg, #3a1420, #2a0d16);
-  border: 1px solid #6b1f34;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
 }
 .role-card .category-line { color: var(--muted); font-size: 0.85rem; margin-bottom: 6px; }
 .role-card .word-line { font-size: 1.5rem; font-weight: 800; }
