@@ -44,11 +44,17 @@ DEFAULT_CATEGORIES = {
     "Places": ["Beach", "Airport", "Library", "Hospital", "School",
                "Restaurant", "Museum", "Stadium", "Mountain", "Desert",
                "Castle", "Zoo", "Cinema", "Park", "Cruise Ship"],
-    "Superheroes": ["Batman", "Superman", "Spider-Man", "Iron Man",
+    "Superheroes": ["Batman", "Superman", "Spider Man", "Iron Man",
                      "Wonder Woman", "The Flash", "Thor", "Hulk",
                      "Black Panther", "Captain America"],
     "Household Items": ["Toaster", "Vacuum", "Blender", "Pillow", "Umbrella",
                          "Mirror", "Candle", "Lamp", "Broom", "Kettle"],
+    "Redapt (Sales)": ["Quota", "Pipeline", "Cold Call", "Discovery Call",
+                        "Elevator Pitch", "Commission", "Upsell", "Renewal",
+                        "Demo", "Kickoff Call", "Objection", "Forecast",
+                        "Closer", "Territory", "Cloud Migration",
+                        "Managed Services", "Data Center", "Prospecting",
+                        "Referral"],
 }
 
 ROOM_CODE_CHARS = "".join(c for c in string.ascii_uppercase if c not in "IO")
