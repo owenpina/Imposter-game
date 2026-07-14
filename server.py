@@ -7,6 +7,7 @@ game. Run with: python3 server.py
 """
 
 import json
+import math
 import os
 import random
 import re
@@ -21,6 +22,7 @@ PORT = int(os.environ.get("PORT", 8765))
 PUBLIC_DIR = Path(__file__).parent / "public"
 MAX_PLAYERS = 20
 REVEAL_DELAY = 5.0  # seconds the reveal banner stays up before auto-advancing
+CLUE_TIME_LIMIT = 15.0  # seconds each player gets to submit a clue
 ONLINE_TIMEOUT = 6.0  # seconds without a poll before a player is shown offline
 
 DEFAULT_CATEGORIES = {
@@ -193,8 +195,8 @@ def resolve_voting(room):
     if tally:
         top = max(tally.values())
         top_targets = [pid for pid, v in tally.items() if v == top]
-        if len(top_targets) == 1:
-            eliminated_id = top_targets[0]
+        # Someone always gets voted off each round; ties are broken at random.
+        eliminated_id = random.choice(top_targets)
 
     if eliminated_id:
         game["eliminated"].append(eliminated_id)
@@ -234,16 +236,25 @@ def tick_room(room):
                 else:
                     game["maxRounds"] = 1
                     start_clue_round(room, first_of_game=False)
+    elif room["phase"] == "clue":
+        elapsed = time.time() - game["phase_started_at"]
+        if elapsed >= CLUE_TIME_LIMIT:
+            advance_past_clue(room)
+
+
+def advance_past_clue(room):
+    game = room["game"]
+    if game["round"] < game["maxRounds"]:
+        start_clue_round(room, first_of_game=False)
+    else:
+        start_voting(room)
 
 
 def maybe_advance_clue(room):
     game = room["game"]
     active = set(active_player_ids(room))
     if active and active.issubset(set(game["cluesSubmitted"])):
-        if game["round"] < game["maxRounds"]:
-            start_clue_round(room, first_of_game=False)
-        else:
-            start_voting(room)
+        advance_past_clue(room)
 
 
 def maybe_advance_voting(room):
@@ -291,6 +302,9 @@ def public_room_state(room, viewer_id):
         me_is_imposter = viewer_id in game["imposterIds"]
         active_ids = active_player_ids(room)
         you_eliminated = viewer_id in game["eliminated"]
+        clue_seconds_left = None
+        if room["phase"] == "clue":
+            clue_seconds_left = max(0, math.ceil(CLUE_TIME_LIMIT - (now - game["phase_started_at"])))
         state["game"] = {
             "round": game["round"],
             "maxRounds": game["maxRounds"],
@@ -302,6 +316,8 @@ def public_room_state(room, viewer_id):
             "cluesSubmittedCount": len(set(game["cluesSubmitted"]) & set(active_ids)),
             "activeCount": len(active_ids),
             "youSubmittedClue": viewer_id in game["cluesSubmitted"],
+            "clueTimeLimit": CLUE_TIME_LIMIT,
+            "clueSecondsLeft": clue_seconds_left,
             "votesCount": len(set(game.get("votes", {}).keys()) & set(active_ids)) if room["phase"] == "voting" else 0,
             "youVoted": viewer_id in game.get("votes", {}),
             "yourVoteTargetId": game.get("votes", {}).get(viewer_id),
@@ -309,6 +325,12 @@ def public_room_state(room, viewer_id):
             "winner": game.get("winner"),
             "winReason": game.get("winReason"),
             "lastGuess": game.get("lastGuessPublic"),
+            "hintsEnabled": game.get("hintsEnabled", False),
+            "imposterHint": (
+                f"Starts with “{game['word'][0].upper()}” • {len(game['word'])} letters"
+                if me_is_imposter and game.get("hintsEnabled")
+                else None
+            ),
         }
         if room["phase"] == "gameover":
             state["game"]["roles"] = [
@@ -430,6 +452,7 @@ def action_start(code, body):
             "winReason": None,
             "reveal": None,
             "lastGuessPublic": None,
+            "hintsEnabled": False,
             "phase_started_at": time.time(),
         }
         start_clue_round(room, first_of_game=True)
@@ -440,6 +463,7 @@ def action_clue(code, body):
     room = get_room(code)
     with LOCK:
         player = auth_player(room, body.get("playerId"), body.get("token"))
+        tick_room(room)
         game = room["game"]
         if not game or room["phase"] != "clue":
             raise ApiError("Not in a clue round right now.")
@@ -462,6 +486,7 @@ def action_vote(code, body):
     room = get_room(code)
     with LOCK:
         player = auth_player(room, body.get("playerId"), body.get("token"))
+        tick_room(room)
         game = room["game"]
         if not game or room["phase"] != "voting":
             raise ApiError("Not in a voting round right now.")
@@ -503,6 +528,18 @@ def action_guess(code, body):
         return {"ok": True, "correct": correct}
 
 
+def action_toggle_hints(code, body):
+    room = get_room(code)
+    with LOCK:
+        player = auth_player(room, body.get("playerId"), body.get("token"))
+        require_host(room, player)
+        game = room["game"]
+        if not game:
+            raise ApiError("Game hasn't started.")
+        game["hintsEnabled"] = not game["hintsEnabled"]
+        return {"ok": True, "hintsEnabled": game["hintsEnabled"]}
+
+
 def action_advance(code, body):
     room = get_room(code)
     with LOCK:
@@ -512,10 +549,7 @@ def action_advance(code, body):
         if not game:
             raise ApiError("Game hasn't started.")
         if room["phase"] == "clue":
-            if game["round"] < game["maxRounds"]:
-                start_clue_round(room, first_of_game=False)
-            else:
-                start_voting(room)
+            advance_past_clue(room)
         elif room["phase"] == "voting":
             resolve_voting(room)
         elif room["phase"] == "reveal":
@@ -586,6 +620,7 @@ ROUTES = {
     ("POST", "/clue"): action_clue,
     ("POST", "/vote"): action_vote,
     ("POST", "/guess"): action_guess,
+    ("POST", "/toggle-hints"): action_toggle_hints,
     ("POST", "/advance"): action_advance,
     ("POST", "/play-again"): action_play_again,
     ("POST", "/leave"): action_leave,

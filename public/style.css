@@ -276,6 +276,32 @@ button.danger { color: var(--bad); border-color: var(--bad); }
   margin-bottom: 20px;
 }
 
+.clue-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--good);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+}
+.timer.urgent { color: var(--bad); border-color: var(--bad); }
+
+.hint-line {
+  background: #12141c;
+  border: 1px solid var(--accent-2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: var(--accent-2);
+}
+
 #guess-feedback { min-height: 1.2em; font-size: 0.85rem; }
 #guess-feedback.ok { color: var(--good); }
 #guess-feedback.bad { color: var(--bad); }

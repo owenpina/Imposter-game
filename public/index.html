@@ -100,7 +100,10 @@
       <div id="role-card" class="role-card"></div>
 
       <div id="clue-phase" class="hidden">
-        <h2>Clues</h2>
+        <div class="clue-heading">
+          <h2>Clues</h2>
+          <div id="clue-timer" class="timer"></div>
+        </div>
         <ul id="clue-list" class="clue-list"></ul>
         <p class="muted" id="clue-progress"></p>
         <form id="clue-form" class="row">
@@ -113,6 +116,7 @@
       <div id="imposter-panel" class="hidden panel imposter-panel">
         <h2>🎭 Imposter Tools</h2>
         <p class="muted">Think you know the word? Guess it to win instantly.</p>
+        <p id="imposter-hint" class="hidden hint-line"></p>
         <form id="guess-form" class="row">
           <input id="guess-input" maxlength="40" placeholder="Guess the secret word&hellip;" autocomplete="off">
           <button class="primary" type="submit">Guess</button>
@@ -142,6 +146,7 @@
         <div class="panel" id="host-controls">
           <h2>Host Controls</h2>
           <button id="btn-advance" class="ghost">Force Advance Phase</button>
+          <button id="btn-toggle-hints" class="ghost">🔎 Imposter Hints: Off</button>
         </div>
       </div>
     </div>

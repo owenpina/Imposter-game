@@ -247,6 +247,11 @@
     catch (err) { toast(err.message); }
   });
 
+  $("btn-toggle-hints").addEventListener("click", async () => {
+    try { await apiPost(authed("toggle-hints"), { playerId: session.playerId, token: session.token }); }
+    catch (err) { toast(err.message); }
+  });
+
   $("btn-play-again").addEventListener("click", async () => {
     try { await apiPost(authed("play-again"), { playerId: session.playerId, token: session.token }); }
     catch (err) { toast(err.message); }
@@ -295,13 +300,23 @@
       $("clue-input").disabled = submitted;
       $("clue-form").querySelector("button").disabled = submitted;
       $("clue-input").placeholder = submitted ? "Waiting for others…" : "Type a one-word clue…";
+
+      const timerEl = $("clue-timer");
+      timerEl.textContent = `⏱ ${g.clueSecondsLeft}s`;
+      timerEl.classList.toggle("urgent", g.clueSecondsLeft <= 5);
     }
 
     // Imposter guess panel
     const showImposterPanel = g.youAreImposter && !g.youAreEliminated && (state.phase === "clue" || state.phase === "voting") && !g.winner;
     $("imposter-panel").classList.toggle("hidden", !showImposterPanel);
+    $("imposter-hint").classList.toggle("hidden", !g.imposterHint);
+    $("imposter-hint").textContent = g.imposterHint ? `💡 Hint: ${g.imposterHint}` : "";
 
     $("last-guess-note").textContent = g.lastGuess || "";
+
+    if (isHost) {
+      $("btn-toggle-hints").textContent = `🔎 Imposter Hints: ${g.hintsEnabled ? "On" : "Off"}`;
+    }
 
     // Voting phase
     const inVoting = state.phase === "voting";
