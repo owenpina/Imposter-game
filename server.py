@@ -235,7 +235,10 @@ def start_clue_round(room, first_of_game=False):
         game["maxRounds"] = room["settings"]["clueRounds"]
     else:
         game["round"] += 1
-    game["turnOrder"] = active_player_ids(room)
+    # Follow the game's shuffled seating order, minus anyone gone or eliminated.
+    active = set(active_player_ids(room))
+    play_order = game.get("playOrder") or []
+    game["turnOrder"] = [pid for pid in play_order if pid in active] or active_player_ids(room)
     game["turnIndex"] = 0
     game["phase_started_at"] = time.time()
 
@@ -633,6 +636,8 @@ def action_start(code, body):
             "maxRounds": room["settings"]["clueRounds"],
             "clues": [],
             "cluesSubmitted": [],
+            # Shuffled once per game so the host isn't always first to clue.
+            "playOrder": random.sample(room["order"], len(room["order"])),
             "turnOrder": [],
             "turnIndex": 0,
             "votes": {},
