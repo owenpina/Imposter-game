@@ -326,8 +326,17 @@
       const votables = state.players.filter((p) => !p.eliminated && !p.isYou);
       const disabled = g.youVoted || g.youAreEliminated;
 
+      const cluesByPlayer = {};
+      for (const c of g.clues) {
+        (cluesByPlayer[c.playerId] ||= []).push(c.clue);
+      }
+
       $("vote-list").innerHTML = votables.map((p) => {
         const sel = g.yourVoteTargetId === p.id ? " selected" : "";
+        const clues = cluesByPlayer[p.id];
+        const clueLine = clues
+          ? `<span class="vote-clue">said: “${clues.map(escapeHtml).join("”, “")}”</span>`
+          : `<span class="vote-clue muted">(no clue given)</span>`;
         const votersForP = Object.entries(g.votes)
           .filter(([, targetId]) => targetId === p.id)
           .map(([voterId]) => nameById[voterId] || "?");
@@ -335,7 +344,7 @@
           ? `<span class="vote-tally">${votersForP.map(escapeHtml).join(", ")} voted this way</span>`
           : "";
         return `<li class="${sel}" data-id="${p.id}">
-            <span class="vote-target-name">${escapeHtml(p.name)} ${tally}</span>
+            <span class="vote-target-name">${escapeHtml(p.name)} ${clueLine} ${tally}</span>
             <button type="button" class="vote-btn" data-id="${p.id}" ${disabled ? "disabled" : ""}>Vote</button>
           </li>`;
       }).join("");

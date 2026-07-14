@@ -184,6 +184,13 @@ button.danger { color: var(--bad); border-color: var(--bad); }
   font-size: 0.75rem;
   color: var(--muted);
 }
+.player-list.votable .vote-clue {
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+.player-list.votable .vote-target-name {
+  flex-wrap: wrap;
+}
 .vote-btn {
   margin: 0;
   padding: 6px 16px;
