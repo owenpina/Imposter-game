@@ -24,6 +24,8 @@ MAX_PLAYERS = 20
 REVEAL_DELAY = 5.0  # seconds the reveal banner stays up before auto-advancing
 CLUE_TURN_TIME_LIMIT = 20.0  # seconds each player gets on their clue turn
 VOTING_TIME_LIMIT = 80.0  # seconds the whole voting phase gets
+COUNTING_DELAY = 10.0  # seconds spent "counting the votes" before the result
+TIE_DISPLAY_DELAY = 4.0  # seconds the TIE! graphic shows before the runoff
 ONLINE_TIMEOUT = 6.0  # seconds without a poll before a player is shown offline
 
 DEFAULT_CATEGORIES = {
@@ -261,27 +263,42 @@ def advance_turn(room):
         game["phase_started_at"] = time.time()
 
 
-def start_voting(room):
+def start_voting(room, candidates=None):
+    """candidates=None means everyone active is votable (normal round);
+    a list restricts votable players (runoff after a tie)."""
     game = room["game"]
     room["phase"] = "voting"
     game["votes"] = {}
+    game["voteCandidates"] = candidates
+    game["phase_started_at"] = time.time()
+
+
+def start_counting(room):
+    game = room["game"]
+    room["phase"] = "counting"
     game["phase_started_at"] = time.time()
 
 
 def resolve_voting(room):
     game = room["game"]
     active = active_player_ids(room)
+    candidates = game.get("voteCandidates") or active
     tally = {}
     for voter, target in game["votes"].items():
-        if voter in active:
+        if voter in active and target in candidates:
             tally[target] = tally.get(target, 0) + 1
 
     eliminated_id = None
     if tally:
         top = max(tally.values())
         top_targets = [pid for pid, v in tally.items() if v == top]
-        # Someone always gets voted off each round; ties are broken at random.
-        eliminated_id = random.choice(top_targets)
+        if len(top_targets) > 1:
+            # Tie: show the TIE! graphic, then a runoff between tied players.
+            game["tieCandidates"] = top_targets
+            game["phase_started_at"] = time.time()
+            room["phase"] = "tie"
+            return
+        eliminated_id = top_targets[0]
 
     if eliminated_id:
         game["eliminated"].append(eliminated_id)
@@ -339,7 +356,8 @@ def tick_bots(room):
                         if room["players"][pid].get("isBot") and pid not in game["votes"]]
         for i, bot_id in enumerate(bots_pending):
             if now - game["phase_started_at"] >= BOT_VOTE_DELAY + i * 1.5:
-                targets = [pid for pid in active if pid != bot_id]
+                candidates = game.get("voteCandidates") or active
+                targets = [pid for pid in candidates if pid != bot_id]
                 if targets:
                     game["votes"][bot_id] = random.choice(targets)
                     maybe_advance_voting(room)
@@ -379,7 +397,15 @@ def tick_room(room):
     elif room["phase"] == "voting":
         elapsed = time.time() - game["phase_started_at"]
         if elapsed >= VOTING_TIME_LIMIT:
+            start_counting(room)
+    elif room["phase"] == "counting":
+        elapsed = time.time() - game["phase_started_at"]
+        if elapsed >= COUNTING_DELAY:
             resolve_voting(room)
+    elif room["phase"] == "tie":
+        elapsed = time.time() - game["phase_started_at"]
+        if elapsed >= TIE_DISPLAY_DELAY:
+            start_voting(room, candidates=game.get("tieCandidates"))
 
 
 def advance_past_clue(room):
@@ -394,7 +420,7 @@ def maybe_advance_voting(room):
     game = room["game"]
     active = set(active_player_ids(room))
     if active and active.issubset(set(game["votes"].keys())):
-        resolve_voting(room)
+        start_counting(room)
 
 
 def public_room_state(room, viewer_id):
@@ -450,6 +476,16 @@ def public_room_state(room, viewer_id):
             voting_seconds_left = max(0, math.ceil(VOTING_TIME_LIMIT - (now - game["phase_started_at"])))
             vote_map = {v: t for v, t in game.get("votes", {}).items() if v in active_ids}
 
+        counting_seconds_left = None
+        if room["phase"] == "counting":
+            counting_seconds_left = max(0, math.ceil(COUNTING_DELAY - (now - game["phase_started_at"])))
+
+        vote_candidates = game.get("voteCandidates")
+        tie_names = []
+        if room["phase"] == "tie":
+            tie_names = [room["players"][pid]["name"]
+                         for pid in game.get("tieCandidates", []) if pid in room["players"]]
+
         state["game"] = {
             "round": game["round"],
             "maxRounds": game["maxRounds"],
@@ -468,6 +504,10 @@ def public_room_state(room, viewer_id):
             "isYourTurn": current_turn_id == viewer_id,
             "votingTimeLimit": VOTING_TIME_LIMIT,
             "votingSecondsLeft": voting_seconds_left,
+            "countingSecondsLeft": counting_seconds_left,
+            "voteCandidates": vote_candidates,
+            "isRunoff": bool(vote_candidates),
+            "tieCandidateNames": tie_names,
             "votesCount": len(vote_map) if room["phase"] == "voting" else 0,
             "votes": vote_map,
             "youVoted": viewer_id in game.get("votes", {}),
@@ -650,7 +690,8 @@ def action_vote(code, body):
             raise ApiError("You've been eliminated and can only spectate.")
         target = body.get("targetId")
         active = active_player_ids(room)
-        if target == player["id"] or target not in active:
+        candidates = game.get("voteCandidates") or active
+        if target == player["id"] or target not in active or target not in candidates:
             raise ApiError("Invalid vote target.")
         game["votes"][player["id"]] = target
         maybe_advance_voting(room)
@@ -662,7 +703,7 @@ def action_guess(code, body):
     with LOCK:
         player = auth_player(room, body.get("playerId"), body.get("token"))
         game = room["game"]
-        if not game or room["phase"] not in ("clue", "voting"):
+        if not game or room["phase"] not in ("clue", "voting", "counting", "tie"):
             raise ApiError("Can't guess right now.")
         if player["id"] not in game["imposterIds"]:
             raise ApiError("Only imposters can guess the word.")
@@ -695,7 +736,11 @@ def action_advance(code, body):
         if room["phase"] == "clue":
             advance_turn(room)  # skip whoever's turn it currently is
         elif room["phase"] == "voting":
+            start_counting(room)
+        elif room["phase"] == "counting":
             resolve_voting(room)
+        elif room["phase"] == "tie":
+            start_voting(room, candidates=game.get("tieCandidates"))
         elif room["phase"] == "reveal":
             game["phase_started_at"] = 0  # force tick_room to fire immediately
         return {"ok": True}

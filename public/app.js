@@ -260,7 +260,7 @@
     $("game-code").textContent = state.code;
     const isHost = state.hostId === state.you;
 
-    const phaseLabels = { clue: "Clue Round", voting: "Voting", reveal: "Reveal" };
+    const phaseLabels = { clue: "Clue Round", voting: "Voting", counting: "Counting Votes", tie: "Tie!", reveal: "Reveal" };
     $("phase-badge").textContent = phaseLabels[state.phase] || state.phase;
     $("round-indicator").textContent = state.phase === "clue" ? ` • Round ${g.round}/${g.maxRounds}` : "";
 
@@ -320,13 +320,15 @@
     const inVoting = state.phase === "voting";
     $("voting-phase").classList.toggle("hidden", !inVoting);
     if (inVoting) {
+      $("voting-title").textContent = g.isRunoff ? "⚡ Runoff Vote — tied players only!" : "Vote for the Imposter";
       $("vote-progress").textContent = `${g.votesCount}/${g.activeCount} voted`;
       const timerEl = $("voting-timer");
       timerEl.textContent = `⏱ ${g.votingSecondsLeft}s`;
       timerEl.classList.toggle("urgent", g.votingSecondsLeft <= 15);
 
       const nameById = Object.fromEntries(state.players.map((p) => [p.id, p.name]));
-      const votables = state.players.filter((p) => !p.eliminated && !p.isYou);
+      const votables = state.players.filter((p) =>
+        !p.eliminated && !p.isYou && (!g.voteCandidates || g.voteCandidates.includes(p.id)));
       const disabled = g.youVoted || g.youAreEliminated;
 
       const cluesByPlayer = {};
@@ -364,6 +366,20 @@
       });
     }
 
+    // Counting phase
+    const inCounting = state.phase === "counting";
+    $("counting-phase").classList.toggle("hidden", !inCounting);
+    if (inCounting) {
+      $("counting-timer").textContent = `⏱ ${g.countingSecondsLeft}s`;
+    }
+
+    // Tie phase
+    const inTie = state.phase === "tie";
+    $("tie-phase").classList.toggle("hidden", !inTie);
+    if (inTie) {
+      $("tie-names").textContent = (g.tieCandidateNames || []).join("  vs  ");
+    }
+
     // Reveal phase
     const inReveal = state.phase === "reveal";
     $("reveal-phase").classList.toggle("hidden", !inReveal);
@@ -376,7 +392,7 @@
           : `${r.eliminatedName} was NOT an imposter.`;
       } else {
         $("reveal-title").textContent = "No one was eliminated";
-        $("reveal-body").textContent = r.reason && r.winner ? "" : "The vote was tied.";
+        $("reveal-body").textContent = r.reason && r.winner ? "" : "No votes were cast.";
       }
       if (r.winner) {
         $("reveal-body").textContent += ` ${r.reason}`;

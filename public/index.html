@@ -133,7 +133,7 @@
 
       <div id="voting-phase" class="hidden">
         <div class="clue-heading">
-          <h2>Vote for the Imposter</h2>
+          <h2 id="voting-title">Vote for the Imposter</h2>
           <div id="voting-timer" class="timer"></div>
         </div>
         <p class="muted" id="vote-progress"></p>
@@ -141,8 +141,19 @@
         <p class="error" id="vote-error"></p>
       </div>
 
-      <div id="reveal-phase" class="hidden">
-        <h2 id="reveal-title"></h2>
+      <div id="counting-phase" class="hidden counting-box">
+        <h2>🗳️ Counting the votes&hellip;</h2>
+        <div id="counting-timer" class="timer big-timer"></div>
+      </div>
+
+      <div id="tie-phase" class="hidden tie-box">
+        <div class="tie-flash">TIE!</div>
+        <p id="tie-names"></p>
+        <p class="muted">Runoff vote between the tied players coming up&hellip;</p>
+      </div>
+
+      <div id="reveal-phase" class="hidden reveal-box">
+        <h2 id="reveal-title" class="reveal-flash"></h2>
         <p id="reveal-body"></p>
       </div>
 
