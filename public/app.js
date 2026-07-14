@@ -5,9 +5,7 @@
 
   let pollTimer = null;
   let lastPhase = null;
-  let lastRound = null;
   let settingsSynced = false;
-  let selectedVoteTarget = null;
 
   const $ = (id) => document.getElementById(id);
   const views = ["home", "lobby", "game", "gameover"];
@@ -127,6 +125,7 @@
         customCategories,
         numImposters: parseInt($("num-imposters").value, 10),
         clueRounds: parseInt($("clue-rounds").value, 10),
+        hintsEnabled: $("hints-enabled").checked,
       });
       toast("Settings saved.");
     } catch (e) {
@@ -179,6 +178,7 @@
       settingsSynced = true;
       $("num-imposters").value = state.settings.numImposters;
       $("clue-rounds").value = state.settings.clueRounds;
+      $("hints-enabled").checked = state.settings.hintsEnabled;
       const customLines = Object.entries(state.settings.customCategories)
         .map(([name, words]) => `${name}: ${words.join(", ")}`);
       $("custom-categories").value = customLines.join("\n");
@@ -187,7 +187,7 @@
     if (!isHost) {
       const catList = state.settings.categories.join(", ") || "(none selected)";
       $("guest-settings-summary").textContent =
-        `Categories: ${catList} • Imposters: ${state.settings.numImposters} • Clue rounds: ${state.settings.clueRounds}`;
+        `Categories: ${catList} • Imposters: ${state.settings.numImposters} • Clue rounds: ${state.settings.clueRounds} • Hints: ${state.settings.hintsEnabled ? "On" : "Off"}`;
     }
   }
 
@@ -247,11 +247,6 @@
     catch (err) { toast(err.message); }
   });
 
-  $("btn-toggle-hints").addEventListener("click", async () => {
-    try { await apiPost(authed("toggle-hints"), { playerId: session.playerId, token: session.token }); }
-    catch (err) { toast(err.message); }
-  });
-
   $("btn-play-again").addEventListener("click", async () => {
     try { await apiPost(authed("play-again"), { playerId: session.playerId, token: session.token }); }
     catch (err) { toast(err.message); }
@@ -296,14 +291,18 @@
       }
       $("clue-list").innerHTML = html || '<li class="muted" style="border:none;background:none">No clues yet this round.</li>';
       $("clue-progress").textContent = `${g.cluesSubmittedCount}/${g.activeCount} submitted this round`;
-      const submitted = g.youSubmittedClue || g.youAreEliminated;
-      $("clue-input").disabled = submitted;
-      $("clue-form").querySelector("button").disabled = submitted;
-      $("clue-input").placeholder = submitted ? "Waiting for others…" : "Type a one-word clue…";
+
+      const yourTurn = g.isYourTurn && !g.youAreEliminated;
+      $("clue-input").disabled = !yourTurn;
+      $("clue-form").querySelector("button").disabled = !yourTurn;
+      $("clue-input").placeholder = yourTurn ? "Type a one-word clue…" : "Waiting for your turn…";
+      $("turn-indicator").textContent = yourTurn
+        ? "⭐ It's your turn!"
+        : g.currentTurnPlayerName ? `Waiting on ${g.currentTurnPlayerName}…` : "";
 
       const timerEl = $("clue-timer");
-      timerEl.textContent = `⏱ ${g.clueSecondsLeft}s`;
-      timerEl.classList.toggle("urgent", g.clueSecondsLeft <= 5);
+      timerEl.textContent = `⏱ ${g.turnSecondsLeft}s`;
+      timerEl.classList.toggle("urgent", g.turnSecondsLeft <= 5);
     }
 
     // Imposter guess panel
@@ -314,27 +313,38 @@
 
     $("last-guess-note").textContent = g.lastGuess || "";
 
-    if (isHost) {
-      $("btn-toggle-hints").textContent = `🔎 Imposter Hints: ${g.hintsEnabled ? "On" : "Off"}`;
-    }
-
     // Voting phase
     const inVoting = state.phase === "voting";
     $("voting-phase").classList.toggle("hidden", !inVoting);
     if (inVoting) {
       $("vote-progress").textContent = `${g.votesCount}/${g.activeCount} voted`;
+      const timerEl = $("voting-timer");
+      timerEl.textContent = `⏱ ${g.votingSecondsLeft}s`;
+      timerEl.classList.toggle("urgent", g.votingSecondsLeft <= 15);
+
+      const nameById = Object.fromEntries(state.players.map((p) => [p.id, p.name]));
       const votables = state.players.filter((p) => !p.eliminated && !p.isYou);
+      const disabled = g.youVoted || g.youAreEliminated;
+
       $("vote-list").innerHTML = votables.map((p) => {
         const sel = g.yourVoteTargetId === p.id ? " selected" : "";
-        return `<li class="${sel}" data-id="${p.id}">${escapeHtml(p.name)}</li>`;
+        const votersForP = Object.entries(g.votes)
+          .filter(([, targetId]) => targetId === p.id)
+          .map(([voterId]) => nameById[voterId] || "?");
+        const tally = votersForP.length
+          ? `<span class="vote-tally">${votersForP.map(escapeHtml).join(", ")} voted this way</span>`
+          : "";
+        return `<li class="${sel}" data-id="${p.id}">
+            <span class="vote-target-name">${escapeHtml(p.name)} ${tally}</span>
+            <button type="button" class="vote-btn" data-id="${p.id}" ${disabled ? "disabled" : ""}>Vote</button>
+          </li>`;
       }).join("");
-      const disabled = g.youVoted || g.youAreEliminated;
-      document.querySelectorAll("#vote-list li").forEach((li) => {
-        if (disabled) { li.style.opacity = "0.6"; li.style.cursor = "default"; return; }
-        li.addEventListener("click", async () => {
+
+      document.querySelectorAll("#vote-list .vote-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
           $("vote-error").textContent = "";
           try {
-            await apiPost(authed("vote"), { playerId: session.playerId, token: session.token, targetId: li.dataset.id });
+            await apiPost(authed("vote"), { playerId: session.playerId, token: session.token, targetId: btn.dataset.id });
           } catch (err) {
             $("vote-error").textContent = err.message;
           }

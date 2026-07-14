@@ -59,6 +59,11 @@
           <h2>Game Settings</h2>
           <div id="category-checks" class="category-grid"></div>
 
+          <label class="checkbox-label">
+            <input id="hints-enabled" type="checkbox">
+            🔎 Enable Imposter Hints <span class="muted">(imposters get a hint related to the secret word)</span>
+          </label>
+
           <label>Custom categories <span class="muted">(one per line: Name: word1, word2, word3)</span>
             <textarea id="custom-categories" rows="3" placeholder="Board Games: Chess, Monopoly, Clue"></textarea>
           </label>
@@ -104,6 +109,7 @@
           <h2>Clues</h2>
           <div id="clue-timer" class="timer"></div>
         </div>
+        <p id="turn-indicator" class="turn-indicator"></p>
         <ul id="clue-list" class="clue-list"></ul>
         <p class="muted" id="clue-progress"></p>
         <form id="clue-form" class="row">
@@ -125,9 +131,12 @@
       </div>
 
       <div id="voting-phase" class="hidden">
-        <h2>Vote for the Imposter</h2>
+        <div class="clue-heading">
+          <h2>Vote for the Imposter</h2>
+          <div id="voting-timer" class="timer"></div>
+        </div>
         <p class="muted" id="vote-progress"></p>
-        <ul id="vote-list" class="player-list voteable"></ul>
+        <ul id="vote-list" class="player-list votable"></ul>
         <p class="error" id="vote-error"></p>
       </div>
 
@@ -146,7 +155,6 @@
         <div class="panel" id="host-controls">
           <h2>Host Controls</h2>
           <button id="btn-advance" class="ghost">Force Advance Phase</button>
-          <button id="btn-toggle-hints" class="ghost">🔎 Imposter Hints: Off</button>
         </div>
       </div>
     </div>

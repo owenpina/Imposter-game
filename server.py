@@ -22,7 +22,8 @@ PORT = int(os.environ.get("PORT", 8765))
 PUBLIC_DIR = Path(__file__).parent / "public"
 MAX_PLAYERS = 20
 REVEAL_DELAY = 5.0  # seconds the reveal banner stays up before auto-advancing
-CLUE_TIME_LIMIT = 15.0  # seconds each player gets to submit a clue
+CLUE_TURN_TIME_LIMIT = 20.0  # seconds each player gets on their clue turn
+VOTING_TIME_LIMIT = 80.0  # seconds the whole voting phase gets
 ONLINE_TIMEOUT = 6.0  # seconds without a poll before a player is shown offline
 
 DEFAULT_CATEGORIES = {
@@ -57,6 +58,61 @@ DEFAULT_CATEGORIES = {
                         "Closer", "Territory", "Cloud Migration",
                         "Managed Services", "Data Center", "Prospecting",
                         "Referral"],
+}
+
+# A loosely related word for each built-in word, used as an optional hint
+# for imposters. Custom host-added words have no entry, so no hint shows.
+WORD_HINTS = {
+    "Soccer": "Goal", "Basketball": "Hoop", "Tennis": "Racket",
+    "Baseball": "Diamond", "Swimming": "Pool", "Golf": "Putt",
+    "Boxing": "Ring", "Cricket": "Wicket", "Hockey": "Puck",
+    "Volleyball": "Net", "Surfing": "Wave", "Skiing": "Slope",
+    "Rugby": "Scrum", "Cycling": "Pedal", "Bowling": "Pins",
+    "Football": "Touchdown", "Gymnastics": "Balance Beam",
+    "Wrestling": "Pin", "Archery": "Bullseye", "Skateboarding": "Ramp",
+    "Titanic": "Iceberg", "Inception": "Dream", "Jaws": "Shark",
+    "Frozen": "Snow", "Avatar": "Pandora", "Gladiator": "Colosseum",
+    "The Matrix": "Simulation", "Shrek": "Ogre", "Rocky": "Boxer",
+    "Up": "Balloons", "Jurassic Park": "Dinosaur", "Star Wars": "Lightsaber",
+    "Finding Nemo": "Clownfish", "The Lion King": "Pride Rock",
+    "Toy Story": "Cowboy",
+    "Elephant": "Trunk", "Tiger": "Stripes", "Penguin": "Waddle",
+    "Dolphin": "Fin", "Kangaroo": "Pouch", "Giraffe": "Neck",
+    "Octopus": "Tentacle", "Eagle": "Talon", "Wolf": "Pack",
+    "Panda": "Bamboo", "Crocodile": "Jaws", "Cheetah": "Sprint",
+    "Owl": "Hoot", "Shark": "Fin", "Koala": "Eucalyptus",
+    "Pizza": "Slice", "Sushi": "Roll", "Tacos": "Shell",
+    "Burger": "Patty", "Pasta": "Noodle", "Curry": "Spice",
+    "Pancakes": "Syrup", "Ramen": "Broth", "Sandwich": "Bread",
+    "Salad": "Lettuce", "Ice Cream": "Scoop", "Burrito": "Wrap",
+    "Waffles": "Syrup", "Dumplings": "Steamed", "Nachos": "Cheese",
+    "Doctor": "Stethoscope", "Teacher": "Chalkboard", "Chef": "Apron",
+    "Pilot": "Cockpit", "Firefighter": "Hose", "Plumber": "Wrench",
+    "Lawyer": "Courtroom", "Artist": "Canvas", "Farmer": "Tractor",
+    "Nurse": "Bandage", "Electrician": "Wire", "Dentist": "Cavity",
+    "Engineer": "Blueprint", "Journalist": "Headline",
+    "Librarian": "Bookshelf",
+    "Beach": "Sand", "Airport": "Runway", "Library": "Bookshelf",
+    "Hospital": "Ward", "School": "Classroom", "Restaurant": "Menu",
+    "Museum": "Exhibit", "Stadium": "Bleachers", "Mountain": "Peak",
+    "Desert": "Sand Dune", "Castle": "Moat", "Zoo": "Enclosure",
+    "Cinema": "Screen", "Park": "Bench", "Cruise Ship": "Deck",
+    "Batman": "Cave", "Superman": "Cape", "Spider Man": "Web",
+    "Iron Man": "Armor", "Wonder Woman": "Lasso", "The Flash": "Speed",
+    "Thor": "Hammer", "Hulk": "Rage", "Black Panther": "Vibranium",
+    "Captain America": "Shield",
+    "Toaster": "Bread", "Vacuum": "Suction", "Blender": "Puree",
+    "Pillow": "Cushion", "Umbrella": "Rain", "Mirror": "Reflection",
+    "Candle": "Wax", "Lamp": "Bulb", "Broom": "Sweep", "Kettle": "Boil",
+    "Quota": "Target", "Pipeline": "Funnel", "Cold Call": "Outreach",
+    "Discovery Call": "Intro Meeting", "Elevator Pitch": "Tagline",
+    "Commission": "Bonus", "Upsell": "Add-on", "Renewal": "Contract",
+    "Demo": "Walkthrough", "Kickoff Call": "Onboarding",
+    "Objection": "Pushback", "Forecast": "Projection",
+    "Closer": "Dealmaker", "Territory": "Region",
+    "Cloud Migration": "AWS", "Managed Services": "Support",
+    "Data Center": "Servers", "Prospecting": "Outreach",
+    "Referral": "Introduction",
 }
 
 ROOM_CODE_CHARS = "".join(c for c in string.ascii_uppercase if c not in "IO")
@@ -106,6 +162,7 @@ def make_room(host_name):
             "customCategories": {},
             "numImposters": 1,
             "clueRounds": 2,
+            "hintsEnabled": False,
         },
         "phase": "lobby",
         "game": None,
@@ -165,7 +222,6 @@ def check_win(room):
 
 def start_clue_round(room, first_of_game=False):
     game = room["game"]
-    game["phase_started_at"] = time.time()
     room["phase"] = "clue"
     game["clues"] = []
     game["cluesSubmitted"] = []
@@ -174,6 +230,25 @@ def start_clue_round(room, first_of_game=False):
         game["maxRounds"] = room["settings"]["clueRounds"]
     else:
         game["round"] += 1
+    game["turnOrder"] = active_player_ids(room)
+    game["turnIndex"] = 0
+    game["phase_started_at"] = time.time()
+
+
+def current_turn_player_id(room):
+    game = room["game"]
+    if 0 <= game["turnIndex"] < len(game["turnOrder"]):
+        return game["turnOrder"][game["turnIndex"]]
+    return None
+
+
+def advance_turn(room):
+    game = room["game"]
+    game["turnIndex"] += 1
+    if game["turnIndex"] >= len(game["turnOrder"]):
+        advance_past_clue(room)
+    else:
+        game["phase_started_at"] = time.time()
 
 
 def start_voting(room):
@@ -237,9 +312,15 @@ def tick_room(room):
                     game["maxRounds"] = 1
                     start_clue_round(room, first_of_game=False)
     elif room["phase"] == "clue":
+        while room["phase"] == "clue":
+            elapsed = time.time() - game["phase_started_at"]
+            if elapsed < CLUE_TURN_TIME_LIMIT:
+                break
+            advance_turn(room)
+    elif room["phase"] == "voting":
         elapsed = time.time() - game["phase_started_at"]
-        if elapsed >= CLUE_TIME_LIMIT:
-            advance_past_clue(room)
+        if elapsed >= VOTING_TIME_LIMIT:
+            resolve_voting(room)
 
 
 def advance_past_clue(room):
@@ -248,13 +329,6 @@ def advance_past_clue(room):
         start_clue_round(room, first_of_game=False)
     else:
         start_voting(room)
-
-
-def maybe_advance_clue(room):
-    game = room["game"]
-    active = set(active_player_ids(room))
-    if active and active.issubset(set(game["cluesSubmitted"])):
-        advance_past_clue(room)
 
 
 def maybe_advance_voting(room):
@@ -294,6 +368,7 @@ def public_room_state(room, viewer_id):
             "customCategories": room["settings"]["customCategories"],
             "numImposters": room["settings"]["numImposters"],
             "clueRounds": room["settings"]["clueRounds"],
+            "hintsEnabled": room["settings"].get("hintsEnabled", False),
             "availableCategories": {k: len(v) for k, v in DEFAULT_CATEGORIES.items()},
         },
     }
@@ -302,9 +377,19 @@ def public_room_state(room, viewer_id):
         me_is_imposter = viewer_id in game["imposterIds"]
         active_ids = active_player_ids(room)
         you_eliminated = viewer_id in game["eliminated"]
-        clue_seconds_left = None
+
+        turn_seconds_left = None
+        current_turn_id = None
         if room["phase"] == "clue":
-            clue_seconds_left = max(0, math.ceil(CLUE_TIME_LIMIT - (now - game["phase_started_at"])))
+            turn_seconds_left = max(0, math.ceil(CLUE_TURN_TIME_LIMIT - (now - game["phase_started_at"])))
+            current_turn_id = current_turn_player_id(room)
+
+        voting_seconds_left = None
+        vote_map = {}
+        if room["phase"] == "voting":
+            voting_seconds_left = max(0, math.ceil(VOTING_TIME_LIMIT - (now - game["phase_started_at"])))
+            vote_map = {v: t for v, t in game.get("votes", {}).items() if v in active_ids}
+
         state["game"] = {
             "round": game["round"],
             "maxRounds": game["maxRounds"],
@@ -316,9 +401,15 @@ def public_room_state(room, viewer_id):
             "cluesSubmittedCount": len(set(game["cluesSubmitted"]) & set(active_ids)),
             "activeCount": len(active_ids),
             "youSubmittedClue": viewer_id in game["cluesSubmitted"],
-            "clueTimeLimit": CLUE_TIME_LIMIT,
-            "clueSecondsLeft": clue_seconds_left,
-            "votesCount": len(set(game.get("votes", {}).keys()) & set(active_ids)) if room["phase"] == "voting" else 0,
+            "turnTimeLimit": CLUE_TURN_TIME_LIMIT,
+            "turnSecondsLeft": turn_seconds_left,
+            "currentTurnPlayerId": current_turn_id,
+            "currentTurnPlayerName": room["players"][current_turn_id]["name"] if current_turn_id in room["players"] else None,
+            "isYourTurn": current_turn_id == viewer_id,
+            "votingTimeLimit": VOTING_TIME_LIMIT,
+            "votingSecondsLeft": voting_seconds_left,
+            "votesCount": len(vote_map) if room["phase"] == "voting" else 0,
+            "votes": vote_map,
             "youVoted": viewer_id in game.get("votes", {}),
             "yourVoteTargetId": game.get("votes", {}).get(viewer_id),
             "reveal": game.get("reveal"),
@@ -327,8 +418,8 @@ def public_room_state(room, viewer_id):
             "lastGuess": game.get("lastGuessPublic"),
             "hintsEnabled": game.get("hintsEnabled", False),
             "imposterHint": (
-                f"Starts with “{game['word'][0].upper()}” • {len(game['word'])} letters"
-                if me_is_imposter and game.get("hintsEnabled")
+                f"Similar word: {WORD_HINTS[game['word']]}"
+                if me_is_imposter and game.get("hintsEnabled") and game["word"] in WORD_HINTS
                 else None
             ),
         }
@@ -415,6 +506,8 @@ def action_settings(code, body):
             except (TypeError, ValueError):
                 n = room["settings"]["clueRounds"]
             room["settings"]["clueRounds"] = max(1, min(6, n))
+        if "hintsEnabled" in body:
+            room["settings"]["hintsEnabled"] = bool(body.get("hintsEnabled"))
         return {"ok": True}
 
 
@@ -446,13 +539,15 @@ def action_start(code, body):
             "maxRounds": room["settings"]["clueRounds"],
             "clues": [],
             "cluesSubmitted": [],
+            "turnOrder": [],
+            "turnIndex": 0,
             "votes": {},
             "eliminated": [],
             "winner": None,
             "winReason": None,
             "reveal": None,
             "lastGuessPublic": None,
-            "hintsEnabled": False,
+            "hintsEnabled": room["settings"].get("hintsEnabled", False),
             "phase_started_at": time.time(),
         }
         start_clue_round(room, first_of_game=True)
@@ -469,8 +564,8 @@ def action_clue(code, body):
             raise ApiError("Not in a clue round right now.")
         if player["id"] in game["eliminated"]:
             raise ApiError("You've been eliminated and can only spectate.")
-        if player["id"] in game["cluesSubmitted"]:
-            raise ApiError("You already submitted a clue this round.")
+        if current_turn_player_id(room) != player["id"]:
+            raise ApiError("It's not your turn yet.")
         clue = str(body.get("clue", "")).strip()[:40]
         if not clue:
             raise ApiError("Clue can't be empty.")
@@ -478,7 +573,7 @@ def action_clue(code, body):
             raise ApiError("You can't use the secret word itself!")
         game["clues"].append({"round": game["round"], "playerId": player["id"], "name": player["name"], "clue": clue})
         game["cluesSubmitted"].append(player["id"])
-        maybe_advance_clue(room)
+        advance_turn(room)
         return {"ok": True}
 
 
@@ -528,18 +623,6 @@ def action_guess(code, body):
         return {"ok": True, "correct": correct}
 
 
-def action_toggle_hints(code, body):
-    room = get_room(code)
-    with LOCK:
-        player = auth_player(room, body.get("playerId"), body.get("token"))
-        require_host(room, player)
-        game = room["game"]
-        if not game:
-            raise ApiError("Game hasn't started.")
-        game["hintsEnabled"] = not game["hintsEnabled"]
-        return {"ok": True, "hintsEnabled": game["hintsEnabled"]}
-
-
 def action_advance(code, body):
     room = get_room(code)
     with LOCK:
@@ -549,7 +632,7 @@ def action_advance(code, body):
         if not game:
             raise ApiError("Game hasn't started.")
         if room["phase"] == "clue":
-            advance_past_clue(room)
+            advance_turn(room)  # skip whoever's turn it currently is
         elif room["phase"] == "voting":
             resolve_voting(room)
         elif room["phase"] == "reveal":
@@ -620,7 +703,6 @@ ROUTES = {
     ("POST", "/clue"): action_clue,
     ("POST", "/vote"): action_vote,
     ("POST", "/guess"): action_guess,
-    ("POST", "/toggle-hints"): action_toggle_hints,
     ("POST", "/advance"): action_advance,
     ("POST", "/play-again"): action_play_again,
     ("POST", "/leave"): action_leave,

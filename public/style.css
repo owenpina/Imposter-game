@@ -168,14 +168,32 @@ button.danger { color: var(--bad); border-color: var(--bad); }
   text-decoration: line-through;
 }
 
-.player-list.voteable li {
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+.player-list.votable li {
+  justify-content: space-between;
 }
-.player-list.voteable li:hover { border-color: var(--accent); }
-.player-list.voteable li.selected {
+.player-list.votable li.selected {
   border-color: var(--accent);
   background: #241c3f;
+}
+.player-list.votable .vote-target-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.player-list.votable .vote-tally {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.vote-btn {
+  margin: 0;
+  padding: 6px 16px;
+  background: var(--accent);
+  color: white;
+}
+.vote-btn:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: default;
 }
 
 .category-grid {
@@ -198,6 +216,23 @@ button.danger { color: var(--bad); border-color: var(--bad); }
   width: auto;
 }
 .category-grid input { width: auto; margin: 0; }
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.checkbox-label input { width: auto; margin: 3px 0 0; flex-shrink: 0; }
+
+.turn-indicator {
+  font-size: 0.9rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin: -4px 0 10px;
+}
 
 .row {
   display: flex;
