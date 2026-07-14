@@ -59,19 +59,22 @@
   // Home view
   // ---------------------------------------------------------------------
 
-  $("btn-create").addEventListener("click", async () => {
+  async function createRoom(practice) {
     const name = $("create-name").value.trim();
     $("home-error").textContent = "";
     if (!name) { $("home-error").textContent = "Enter your name."; return; }
     try {
-      const data = await apiPost("/api/rooms", { name });
+      const data = await apiPost("/api/rooms", { name, practice });
       saveSession({ roomCode: data.roomCode, playerId: data.playerId, token: data.token });
       settingsSynced = false;
       enterRoom();
     } catch (e) {
       $("home-error").textContent = e.message;
     }
-  });
+  }
+
+  $("btn-create").addEventListener("click", () => createRoom(false));
+  $("btn-practice").addEventListener("click", () => createRoom(true));
 
   $("btn-join").addEventListener("click", async () => {
     const code = $("join-code").value.trim().toUpperCase();
@@ -158,7 +161,7 @@
 
   function renderLobby(state) {
     $("lobby-code").textContent = state.code;
-    $("lobby-count").textContent = `(${state.players.length}/20)`;
+    $("lobby-count").textContent = `(${state.players.length}/20)${state.isPractice ? " · 🤖 Practice" : ""}`;
 
     const isHost = state.hostId === state.you;
     $("lobby-players").innerHTML = state.players.map((p) => playerLi(p, { showKick: isHost && !p.isYou })).join("");

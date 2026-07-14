@@ -139,17 +139,21 @@ class ApiError(Exception):
         self.status = status
 
 
-def make_player(name):
+def make_player(name, is_bot=False):
     return {
         "id": new_id(),
         "token": new_id(),
         "name": name,
         "lastSeen": time.time(),
         "score": 0,
+        "isBot": is_bot,
     }
 
 
-def make_room(host_name):
+BOT_NAMES = ["Bot Rex 🤖", "Bot Ivy 🤖", "Bot Mo 🤖"]
+
+
+def make_room(host_name, practice=False):
     code = new_room_code()
     host = make_player(host_name)
     room = {
@@ -166,8 +170,14 @@ def make_room(host_name):
         },
         "phase": "lobby",
         "game": None,
+        "isPractice": practice,
         "createdAt": time.time(),
     }
+    if practice:
+        for name in BOT_NAMES:
+            bot = make_player(name, is_bot=True)
+            room["players"][bot["id"]] = bot
+            room["order"].append(bot["id"])
     ROOMS[code] = room
     return room, host
 
@@ -292,8 +302,57 @@ def resolve_voting(room):
         game["winReason"] = reason
 
 
+BOT_CLUE_DELAY = 2.5  # seconds a bot "thinks" before submitting its clue
+BOT_VOTE_DELAY = 3.0  # seconds into voting before bots start voting
+
+BOT_CREW_FILLER = ["classic", "popular", "common", "well-known", "everyday"]
+BOT_IMPOSTER_FILLER = ["interesting", "tricky", "familiar", "typical", "notable"]
+
+
+def bot_take_clue_turn(room, bot_id):
+    game = room["game"]
+    bot = room["players"][bot_id]
+    if bot_id in game["imposterIds"]:
+        clue = random.choice(BOT_IMPOSTER_FILLER)
+    else:
+        # Crew bots know the word: half the time use the related hint word.
+        hint = WORD_HINTS.get(game["word"])
+        clue = hint if hint and random.random() < 0.5 else random.choice(BOT_CREW_FILLER)
+    game["clues"].append({"round": game["round"], "playerId": bot_id, "name": bot["name"], "clue": clue})
+    game["cluesSubmitted"].append(bot_id)
+    advance_turn(room)
+
+
+def tick_bots(room):
+    game = room["game"]
+    if not room.get("isPractice") or not game or game.get("winner"):
+        return
+    now = time.time()
+    if room["phase"] == "clue":
+        turn_id = current_turn_player_id(room)
+        if turn_id and room["players"].get(turn_id, {}).get("isBot"):
+            if now - game["phase_started_at"] >= BOT_CLUE_DELAY:
+                bot_take_clue_turn(room, turn_id)
+    elif room["phase"] == "voting":
+        active = active_player_ids(room)
+        bots_pending = [pid for pid in active
+                        if room["players"][pid].get("isBot") and pid not in game["votes"]]
+        for i, bot_id in enumerate(bots_pending):
+            if now - game["phase_started_at"] >= BOT_VOTE_DELAY + i * 1.5:
+                targets = [pid for pid in active if pid != bot_id]
+                if targets:
+                    game["votes"][bot_id] = random.choice(targets)
+                    maybe_advance_voting(room)
+                    if room["phase"] != "voting":
+                        return
+
+
 def tick_room(room):
     """Lazily process time-based auto-transitions."""
+    game = room["game"]
+    if not game:
+        return
+    tick_bots(room)
     game = room["game"]
     if not game:
         return
@@ -352,7 +411,7 @@ def public_room_state(room, viewer_id):
             "id": p["id"],
             "name": p["name"],
             "isHost": pid == room["hostId"],
-            "online": (now - p["lastSeen"]) < ONLINE_TIMEOUT,
+            "online": p.get("isBot") or (now - p["lastSeen"]) < ONLINE_TIMEOUT,
             "eliminated": bool(game and pid in game["eliminated"]),
             "isYou": pid == viewer_id,
         })
@@ -362,6 +421,7 @@ def public_room_state(room, viewer_id):
         "phase": room["phase"],
         "hostId": room["hostId"],
         "you": viewer_id,
+        "isPractice": room.get("isPractice", False),
         "players": players,
         "settings": {
             "categories": room["settings"]["categories"],
@@ -458,7 +518,8 @@ def parse_custom_categories(raw):
 
 def action_create_room(body):
     name = str(body.get("name", "")).strip()[:20] or "Host"
-    room, host = make_room(name)
+    practice = bool(body.get("practice"))
+    room, host = make_room(name, practice=practice)
     return {"roomCode": room["code"], "playerId": host["id"], "token": host["token"]}
 
 

@@ -105,6 +105,7 @@ button.ghost {
 }
 
 button.small { padding: 6px 12px; font-size: 0.8rem; }
+button.practice-btn { width: 100%; margin-top: 8px; margin-right: 0; }
 button.danger { color: var(--bad); border-color: var(--bad); }
 
 .error {
