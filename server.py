@@ -24,7 +24,7 @@ MAX_PLAYERS = 20
 REVEAL_DELAY = 5.0  # seconds the reveal banner stays up before auto-advancing
 CLUE_TURN_TIME_LIMIT = 20.0  # seconds each player gets on their clue turn
 VOTING_TIME_LIMIT = 80.0  # seconds the whole voting phase gets
-COUNTING_DELAY = 10.0  # seconds spent "counting the votes" before the result
+COUNTING_DELAY = 5.0  # seconds spent "counting the votes" before the result
 TIE_DISPLAY_DELAY = 4.0  # seconds the TIE! graphic shows before the runoff
 ONLINE_TIMEOUT = 6.0  # seconds without a poll before a player is shown offline
 
